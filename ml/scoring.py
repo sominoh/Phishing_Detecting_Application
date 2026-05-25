@@ -7,8 +7,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 keywords_list = [
     "검찰", "경찰", "수사", "계좌", "동결", "인증번호",
     "앱 설치", "송금", "입금", "대포통장",
-    "[Web]", "엄마", "아빠", "돈 보내",
-    "결제되었습니다", "확인", "배송지 누락",
+    "[Web]", "돈 보내",
+    "결제되었습니다", "배송지 누락",
     "파일 설치", "영상 보내"
 ]
 
@@ -72,9 +72,23 @@ phishing_patterns = [
 ]
 
 
+normal_patterns = [
+    "엄마 나 도착했어",
+    "아빠 나 친구랑 놀다 갈게",
+    "배고파 밥 먹자",
+    "집에 다 왔어",
+    "사랑해 잘 자",
+    "오늘 회의는 몇 시야",
+    "문의하신 내용은 확인 후 답변드리겠습니다",
+    "배송이 시작되었습니다",
+    "결제가 완료되었습니다",
+    "좋은 하루 보내세요"
+]
+
+
 vectorizer = TfidfVectorizer()
 
-vectorizer.fit(phishing_patterns)
+vectorizer.fit(phishing_patterns + normal_patterns)
 
 pattern_vec = vectorizer.transform(phishing_patterns)
 
@@ -149,7 +163,8 @@ def combine_scores(text, ai):
     U = urgency_score(text)
     C = context_score(text)
 
-    z = -3 + 5 * K + 5 * P + 10 * AI + 4 * U + 5 * C
+    # Updated weights: Lower AI, higher U/C, squaring AI for accuracy
+    z = -5 + 5 * K + 5 * P + 4 * (AI**2) + 8 * U + 8 * C
 
     prob = sigmoid(z)
 
@@ -167,10 +182,10 @@ def is_phishing_final(prob, K, P, AI, U, C):
     if prob < 0.75:
         return False, prob
 
-    if AI < 0.4:
+    if AI < 0.3:  # Lowered threshold slightly to account for squaring
         return False, prob
 
-    risk_signal = (P > 0.4) or (U > 0.5) or (K > 0.3)
+    risk_signal = (P > 0.4) or (U > 0.4) or (K > 0.2) or (C > 0.3)
 
     if not risk_signal:
         return False, prob

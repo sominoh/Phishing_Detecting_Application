@@ -3,6 +3,12 @@
     package="com.example.voiceguard">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"
@@ -20,9 +26,25 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <activity android:name=".SttAnalysisActivity"/>
-        <activity android:name=".SmsAnalysisActivity"/>
+        <activity android:name=".SttAnalysisActivity" android:exported="true" />
+        <activity android:name=".SmsAnalysisActivity" android:exported="true" />
         <activity android:name=".PhishingInfoActivity"/>
         <activity android:name=".StatisticsActivity"/>
+
+        <service android:name=".CallService"
+            android:foregroundServiceType="microphone"
+            android:exported="false" />
+
+        <receiver android:name=".SmsReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name=".CallReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

@@ -1,5 +1,6 @@
 package com.example.voiceguard;
 
+import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
@@ -55,6 +56,9 @@ public class SmsAnalysisActivity extends AppCompatActivity {
         historyAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, historyList);
         lvHistory.setAdapter(historyAdapter);
 
+        // Check for SMS body from Intent and perform automatic analysis
+        handleIntent(getIntent());
+
         fetchHistory(0);
 
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
@@ -71,6 +75,23 @@ public class SmsAnalysisActivity extends AppCompatActivity {
             cardResult.setVisibility(View.GONE);
         });
         findViewById(R.id.btnSampleSms).setOnClickListener(v -> etSmsInput.setText(SAMPLE_SMS));
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIntent(intent);
+    }
+
+    private void handleIntent(Intent intent) {
+        if (intent == null) return;
+        String incomingSms = intent.getStringExtra("sms_body");
+        if (incomingSms != null && !incomingSms.isEmpty()) {
+            etSmsInput.setText(incomingSms);
+            Toast.makeText(this, "새 문자를 분석합니다...", Toast.LENGTH_SHORT).show();
+            performAnalysis(incomingSms); // 자동으로 분석 함수 호출
+        }
     }
 
     private void performAnalysis(String text) {

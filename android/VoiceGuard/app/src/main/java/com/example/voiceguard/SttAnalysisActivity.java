@@ -1,5 +1,9 @@
 package com.example.voiceguard;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
@@ -32,6 +36,18 @@ public class SttAnalysisActivity extends AppCompatActivity {
     private List<String> historyList = new ArrayList<>();
     private ArrayAdapter<String> historyAdapter;
 
+    private BroadcastReceiver sttReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (CallService.ACTION_STT_RESULT.equals(intent.getAction())) {
+                String text = intent.getStringExtra(CallService.EXTRA_STT_TEXT);
+                if (text != null) {
+                    etSttInput.setText(text);
+                }
+            }
+        }
+    };
+
     private static final String SAMPLE1 =
             "저희 수사과에서 금융사기주범 김명철을 검거했는데 압수수색 당시 현장에서 " +
                     "위조된 신분증 대포통장 그리고 보안카드 등을 대량으로 압수했어요. " +
@@ -60,7 +76,17 @@ public class SttAnalysisActivity extends AppCompatActivity {
         historyAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, historyList);
         lvHistory.setAdapter(historyAdapter);
 
+        // Check for STT text from Intent
+        handleIntent(getIntent());
+
         fetchHistory(0);
+
+        // Register receiver for real-time STT
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(sttReceiver, new IntentFilter(CallService.ACTION_STT_RESULT), Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(sttReceiver, new IntentFilter(CallService.ACTION_STT_RESULT));
+        }
 
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnAnalyzeStt).setOnClickListener(v -> {
@@ -77,6 +103,29 @@ public class SttAnalysisActivity extends AppCompatActivity {
         });
         findViewById(R.id.btnSample1).setOnClickListener(v -> etSttInput.setText(SAMPLE1));
         findViewById(R.id.btnSample2).setOnClickListener(v -> etSttInput.setText(SAMPLE2));
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleIntent(intent);
+    }
+
+    private void handleIntent(Intent intent) {
+        String incomingStt = intent.getStringExtra("stt_text");
+        if (incomingStt != null && !incomingStt.isEmpty()) {
+            etSttInput.setText(incomingStt);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        try {
+            unregisterReceiver(sttReceiver);
+        } catch (Exception e) {
+            // Ignore if not registered
+        }
     }
 
     private void performAnalysis(String text) {

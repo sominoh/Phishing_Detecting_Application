@@ -32,3 +32,13 @@ ml/model/kobert_phishing/*
 
 # Cache
 .cache/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.gradle/
+local.properties
+build/
+captures/
+.externalNativeBuild
+.cxx
