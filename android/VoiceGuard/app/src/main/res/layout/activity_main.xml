@@ -21,14 +21,6 @@
             android:textColor="@color/primary"
             android:textSize="28sp"
             android:fontFamily="sans-serif-black"/>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/main_subtitle"
-            android:textColor="@color/text_secondary"
-            android:textSize="14sp"
-            android:layout_marginTop="4dp"/>
     </LinearLayout>
 
     <ScrollView
