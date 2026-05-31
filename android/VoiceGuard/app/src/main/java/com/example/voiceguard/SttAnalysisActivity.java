@@ -4,16 +4,22 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.util.Log;
 import android.view.View;
 import android.widget.*;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import com.example.voiceguard.api.AnalysisApi;
 import com.example.voiceguard.api.AnalysisRequest;
 import com.example.voiceguard.api.AnalysisResponse;
@@ -27,6 +33,7 @@ import retrofit2.Response;
 public class SttAnalysisActivity extends AppCompatActivity {
 
     private static final String TAG = "SttAnalysisActivity";
+    private static final int REQ_RECORD_AUDIO = 2001;
     private static final int MAX_RETRY = 2;
     private static final long RETRY_DELAY_MS = 1200;
     private static final long AUTO_ANALYZE_DEBOUNCE_MS = 1200;
@@ -34,6 +41,7 @@ public class SttAnalysisActivity extends AppCompatActivity {
     private static final int AUTO_ANALYZE_MIN_LEN = 6;
 
     private EditText etSttInput;
+    private ImageButton btnMicStt;
     private CardView cardResult;
     private TextView tvRiskPercent, tvRiskLevel, tvKeywords, tvTags, tvGuide;
     private ProgressBar progressRisk;
@@ -44,6 +52,15 @@ public class SttAnalysisActivity extends AppCompatActivity {
     private final Handler sttHandler = new Handler(Looper.getMainLooper());
     private String lastAnalyzedText = "";
     private long lastAnalyzedAt = 0L;
+    private String textBeforeMic = "";
+    private SpeechRecognizer speechRecognizer;
+    private Intent recognizerIntent;
+    private boolean isMicListening = false;
+    private boolean pendingMicStart = false;
+    private String micStableText = "";
+    private String micPartialText = "";
+    private final Handler micHandler = new Handler(Looper.getMainLooper());
+    private boolean isRestartScheduled = false;
 
     private BroadcastReceiver sttReceiver = new BroadcastReceiver() {
         @Override
@@ -51,8 +68,7 @@ public class SttAnalysisActivity extends AppCompatActivity {
             if (CallService.ACTION_STT_RESULT.equals(intent.getAction())) {
                 String text = intent.getStringExtra(CallService.EXTRA_STT_TEXT);
                 if (text != null) {
-                    etSttInput.setText(text);
-                    scheduleAutoAnalyze(text);
+                    updateInputText(text, true);
                 }
             }
         }
@@ -74,6 +90,7 @@ public class SttAnalysisActivity extends AppCompatActivity {
         setContentView(R.layout.activity_stt_analysis);
 
         etSttInput    = findViewById(R.id.etSttInput);
+        btnMicStt     = findViewById(R.id.btnMicStt);
         cardResult    = findViewById(R.id.cardResult);
         tvRiskPercent = findViewById(R.id.tvRiskPercent);
         tvRiskLevel   = findViewById(R.id.tvRiskLevel);
@@ -82,6 +99,9 @@ public class SttAnalysisActivity extends AppCompatActivity {
         tvGuide       = findViewById(R.id.tvGuide);
         progressRisk  = findViewById(R.id.progressRisk);
         lvHistory     = findViewById(R.id.lvHistory);
+
+        btnMicStt.setOnClickListener(v -> toggleMic());
+        initSpeechRecognizer();
 
         historyAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, historySummaries);
         lvHistory.setAdapter(historyAdapter);
@@ -114,11 +134,11 @@ public class SttAnalysisActivity extends AppCompatActivity {
             performAnalysis(input);
         });
         findViewById(R.id.btnClearStt).setOnClickListener(v -> {
-            etSttInput.setText("");
+            updateInputText("", false);
             cardResult.setVisibility(View.GONE);
         });
-        findViewById(R.id.btnSample1).setOnClickListener(v -> etSttInput.setText(SAMPLE1));
-        findViewById(R.id.btnSample2).setOnClickListener(v -> etSttInput.setText(SAMPLE2));
+        findViewById(R.id.btnSample1).setOnClickListener(v -> updateInputText(SAMPLE1, false));
+        findViewById(R.id.btnSample2).setOnClickListener(v -> updateInputText(SAMPLE2, false));
     }
 
     @Override
@@ -130,10 +150,7 @@ public class SttAnalysisActivity extends AppCompatActivity {
     private void handleIntent(Intent intent) {
         String incomingStt = intent.getStringExtra("stt_text");
         if (incomingStt != null && !incomingStt.isEmpty()) {
-            etSttInput.setText(incomingStt);
-            if (intent.getBooleanExtra("auto_analyze", false)) {
-                scheduleAutoAnalyze(incomingStt);
-            }
+            updateInputText(incomingStt, intent.getBooleanExtra("auto_analyze", false));
         }
     }
 
@@ -146,6 +163,26 @@ public class SttAnalysisActivity extends AppCompatActivity {
             // Ignore if not registered
         }
         sttHandler.removeCallbacksAndMessages(null);
+        micHandler.removeCallbacksAndMessages(null);
+        if (speechRecognizer != null) {
+            speechRecognizer.destroy();
+            speechRecognizer = null;
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_RECORD_AUDIO) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted && pendingMicStart) {
+                pendingMicStart = false;
+                startMicListening();
+            } else {
+                pendingMicStart = false;
+                Toast.makeText(this, "마이크 권한이 필요합니다", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private void scheduleAutoAnalyze(String text) {
@@ -170,6 +207,182 @@ public class SttAnalysisActivity extends AppCompatActivity {
             lastAnalyzedAt = now;
             performAnalysis(current);
         }, AUTO_ANALYZE_DEBOUNCE_MS);
+    }
+
+    private void updateInputText(String text, boolean autoAnalyze) {
+        etSttInput.setText(text);
+        etSttInput.setSelection(etSttInput.getText().length());
+        if (autoAnalyze) {
+            scheduleAutoAnalyze(text);
+        }
+    }
+
+    private void initSpeechRecognizer() {
+        if (speechRecognizer != null) {
+            return;
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            btnMicStt.setEnabled(false);
+            Toast.makeText(this, "음성 인식을 사용할 수 없습니다", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        recognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR");
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 3000);
+
+        speechRecognizer.setRecognitionListener(new RecognitionListener() {
+            @Override public void onReadyForSpeech(Bundle params) {
+                Log.d(TAG, "onReadyForSpeech");
+            }
+            @Override public void onBeginningOfSpeech() {
+                Log.d(TAG, "onBeginningOfSpeech");
+            }
+            @Override public void onRmsChanged(float rmsdB) {}
+            @Override public void onBufferReceived(byte[] buffer) {}
+            @Override public void onEndOfSpeech() {
+                Log.d(TAG, "onEndOfSpeech");
+                scheduleRestartIfNeeded(500);
+            }
+
+            @Override
+            public void onError(int error) {
+                Log.e(TAG, "SpeechRecognizer Error: " + error);
+                if (error == SpeechRecognizer.ERROR_NO_MATCH) {
+                    // Ignore no match to avoid annoying toasts
+                    Log.d(TAG, "No speech match found.");
+                } else if (error != SpeechRecognizer.ERROR_CLIENT) {
+                    Toast.makeText(SttAnalysisActivity.this, "음성 인식 오류: " + error, Toast.LENGTH_SHORT).show();
+                }
+                if (isMicListening && error != SpeechRecognizer.ERROR_CLIENT) {
+                    scheduleRestartIfNeeded(700);
+                }
+            }
+
+            @Override
+            public void onResults(Bundle results) {
+                ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (matches != null && !matches.isEmpty()) {
+                    String recognizedText = matches.get(0);
+                    micStableText = (micStableText + recognizedText).trim() + " ";
+                    micPartialText = "";
+                    updateInputText(micStableText.trim(), true);
+                }
+                if (isMicListening) {
+                    scheduleRestartIfNeeded(250);
+                }
+            }
+
+            @Override
+            public void onPartialResults(Bundle partialResults) {
+                ArrayList<String> matches = partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (matches != null && !matches.isEmpty()) {
+                    micPartialText = matches.get(0);
+                    updateInputText((micStableText + micPartialText).trim(), false);
+                }
+            }
+
+            @Override public void onEvent(int eventType, Bundle params) {}
+        });
+    }
+
+    private void toggleMic() {
+        if (isMicListening) {
+            stopMicListening(true);
+            return;
+        }
+        if (!hasAudioPermission()) {
+            pendingMicStart = true;
+            ActivityCompat.requestPermissions(this,
+                    new String[]{android.Manifest.permission.RECORD_AUDIO},
+                    REQ_RECORD_AUDIO);
+            return;
+        }
+        startMicListening();
+    }
+
+    private boolean hasAudioPermission() {
+        return ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void startMicListening() {
+        initSpeechRecognizer();
+        if (speechRecognizer == null) {
+            return;
+        }
+        try {
+            String currentText = etSttInput.getText().toString().trim();
+            micStableText = currentText.isEmpty() ? "" : currentText + " ";
+            micPartialText = "";
+            isMicListening = true;
+            isRestartScheduled = false;
+            updateMicButton();
+            speechRecognizer.startListening(recognizerIntent);
+        } catch (Exception e) {
+            Log.e(TAG, "startMicListening failed", e);
+            isMicListening = false;
+            updateMicButton();
+            Toast.makeText(this, "음성 입력을 시작할 수 없습니다", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void stopMicListening(boolean analyzeCurrent) {
+        isMicListening = false;
+        isRestartScheduled = false;
+        micHandler.removeCallbacksAndMessages(null);
+        if (speechRecognizer != null) {
+            try {
+                speechRecognizer.stopListening();
+                speechRecognizer.cancel();
+            } catch (Exception e) {
+                Log.w(TAG, "stopMicListening failed", e);
+            }
+        }
+        updateMicButton();
+        if (analyzeCurrent) {
+            String current = etSttInput.getText().toString().trim();
+            if (!current.isEmpty()) {
+                scheduleAutoAnalyze(current);
+            }
+        }
+    }
+
+    private void scheduleRestartIfNeeded(long delayMs) {
+        if (!isMicListening || speechRecognizer == null || isRestartScheduled) {
+            return;
+        }
+        isRestartScheduled = true;
+        micHandler.postDelayed(() -> {
+            isRestartScheduled = false;
+            if (isMicListening && speechRecognizer != null) {
+                try {
+                    speechRecognizer.startListening(recognizerIntent);
+                } catch (Exception e) {
+                    Log.w(TAG, "restartMicListening failed", e);
+                }
+            }
+        }, delayMs);
+    }
+
+    private void restartMicListening() {
+        scheduleRestartIfNeeded(250);
+    }
+
+    private void updateMicButton() {
+        if (isMicListening) {
+            btnMicStt.setColorFilter(ContextCompat.getColor(this, R.color.risk_danger));
+            btnMicStt.setAlpha(0.8f);
+        } else {
+            btnMicStt.setColorFilter(ContextCompat.getColor(this, R.color.primary));
+            btnMicStt.setAlpha(1.0f);
+        }
+        btnMicStt.setContentDescription(isMicListening ? "음성 입력 중지" : "음성 입력 시작");
     }
 
     private void performAnalysis(String text) {
@@ -326,3 +539,4 @@ public class SttAnalysisActivity extends AppCompatActivity {
         dialog.show();
     }
 }
+
