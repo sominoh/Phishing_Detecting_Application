@@ -65,6 +65,13 @@ special_tokens_map.json
 
 ※ 모델 파일 용량이 크기 때문에 .gitignore 처리되어 있으며, 직접 학습 후 생성해서 사용해주세요.
 
+
+### 사용 모델
+
+- KoBERT (Apache License 2.0)
+  - Author: SK Telecom (SKTBrain)
+  - Repository: https://github.com/SKTBrain/KoBERT
+
 ---
 
 ## 5. FastAPI 서버 실행 (안드로이드 연동)
@@ -142,14 +149,6 @@ http://127.0.0.1:8000/docs
 서버 실행 후 프로젝트 루트에 `analysis.db` 파일이 생성됩니다.
 
 VS Code SQLite Viewer 확장 등을 사용하면 DB 내용을 확인할 수 있습니다.
-
----
-
-## Open Source Software
-
-- KoBERT (Apache License 2.0)
-  - Author: SK Telecom (SKTBrain)
-  - Repository: https://github.com/SKTBrain/KoBERT
 
 ---
 
