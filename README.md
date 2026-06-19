@@ -65,13 +65,6 @@ special_tokens_map.json
 
 ※ 모델 파일 용량이 크기 때문에 .gitignore 처리되어 있으며, 직접 학습 후 생성해서 사용해주세요.
 
-
-### 사용 모델
-
-- KoBERT (Apache License 2.0)
-  - Author: SK Telecom (SKTBrain)
-  - Repository: https://github.com/SKTBrain/KoBERT
-
 ---
 
 ## 5. FastAPI 서버 실행 (안드로이드 연동)
@@ -87,7 +80,7 @@ uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 
 ---
 
-## 7. 탐지 알고리즘 (Risk Scoring Logic)
+## 6. 탐지 알고리즘 (Risk Scoring Logic)
 
 본 시스템은 딥러닝(KoBERT) 점수와 규칙 기반 점수를 결합한 하이브리드 판정 방식을 사용합니다.
 
@@ -101,7 +94,7 @@ uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 
 ---
 
-## 8. 실시간 탐지 및 자동 연동 기능
+## 7. 실시간 탐지 및 자동 연동 기능
 
 본 시스템은 사용자의 개입을 최소화하기 위한 실시간 자동화 기능을 포함하고 있습니다.
 
@@ -120,7 +113,7 @@ uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 
 ---
 
-## 9. 분석 기록 상세 확인 및 관리
+## 8. 분석 기록 상세 확인 및 관리
 
 사용자는 과거의 분석 기록을 단순히 리스트로 보는 것을 넘어, 상세한 내용을 팝업을 통해 재확인할 수 있습니다.
 
