@@ -8,7 +8,7 @@
 - `data/`: 학습/분석에 쓰이는 원천 데이터(`cases.csv`).
 - `ml/`: KoBERT 학습/추론 및 점수 결합 로직.
 - `backend/`: FastAPI 서버, 라우터, DB 모델/스키마, 서비스 로직.
-- `android/Phishing_Detecting/`: Android 프런트엔드 앱.
+- `android/VoiceGuard/`: Android 프런트엔드 앱.
 - `src/`: 실험/노트북 추출 코드(`phishing_detector.py`).
 
 ---
@@ -92,14 +92,14 @@
 ## 4) Android 프런트엔드 구성 및 동작
 
 ### 4.1 앱 구조
-- `android/Phishing_Detecting/app/src/main/java/com/example/phishing_detecting/MainActivity.java`
+- `android/VoiceGuard/app/src/main/java/com/example/voiceguard/MainActivity.java`
   - 카드 클릭으로 각 기능 화면 이동.
   - 이동 대상: `SttAnalysisActivity`, `SmsAnalysisActivity`, `PhishingInfoActivity`, `StatisticsActivity`.
 
 ### 4.2 네트워크 클라이언트
-- `android/Phishing_Detecting/app/src/main/java/com/example/phishing_detecting/api/ApiClient.java`
+- `android/VoiceGuard/app/src/main/java/com/example/voiceguard/api/ApiClient.java`
   - Retrofit 설정, Base URL: `http://10.0.2.2:8000/` (에뮬레이터에서 로컬 서버 접근).
-- `android/Phishing_Detecting/app/src/main/java/com/example/phishing_detecting/api/AnalysisApi.java`
+- `android/VoiceGuard/app/src/main/java/com/example/voiceguard/api/AnalysisApi.java`
   - `POST /analysis/stt`, `POST /analysis/message`, `GET /history`, `GET /stats` 정의.
 - DTO
   - `AnalysisRequest.java`, `AnalysisResponse.java`, `StatsResponse.java`.
@@ -131,7 +131,7 @@
   - **통합 상세 팝업**: 기록 클릭 시 유형(SMS/STT) 구분 및 탐지 키워드를 포함한 상세 정보 제공.
 
 ### 4.6 앱 매니페스트
-- `android/Phishing_Detecting/app/src/main/AndroidManifest.xml`
+- `android/VoiceGuard/app/src/main/AndroidManifest.xml`
   - 인터넷 권한, HTTP 통신 허용, 액티비티 등록.
 
 ---
