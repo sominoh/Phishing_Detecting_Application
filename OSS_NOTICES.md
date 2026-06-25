@@ -20,5 +20,7 @@
 * Gradle Wrapper (Apache License 2.0)
 
 # Other Assets
+
 * Android Robot Icon (CC BY 3.0)
+
   The Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the Creative Commons 3.0 Attribution License.
